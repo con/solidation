@@ -1,3 +1,5 @@
+#/usr/bin/env python3
+
 import sys
 import os
 from datetime import datetime
@@ -29,24 +31,36 @@ repos = (
     'psychoinformatics-de/datalad-debian',
 )
 
+members = (
+    'adswa', 'yarikoptic', 'mih', 'jsheunis', 'jwodder', 'bpoldrack',
+    'christian-monch', 'mslw', 'kyleam',
+)
 
-class DataLadHealth(object):
-    def __init__(self, github_token, basepath=None, recent_days=7, repos=None):
+
+class HealthReport(object):
+    def __init__(self, github_token, project="Project", basepath=None, recent_days=7, repos=None, members=None):
         self.basepath = Path(basepath) if basepath else Path.cwd()
         self.gh = Github(github_token)
         self.issues_since = datetime.fromtimestamp(
             datetime.utcnow().timestamp() - recent_days * 24 * 3600)
+        self.project = project
         self.repos = repos
         self.open_prs = []
         self.active_issues = []
         self.active_prs = []
         # open issues and PRs
         self.open_ip = []
-        self.datalad_members = [
-            'adswa', 'yarikoptic', 'mih', 'jsheunis', 'jwodder', 'bpoldrack',
-            'christian-monch', 'mslw', 'kyleam',
-            #m.login for m in self.gh.get_organization('datalad').get_members()
-        ]
+        if members is None:
+            raise NotImplemented("Pick up all members")
+            # something like flattening of
+            # members = list(set(sum(
+            #     (
+            #         m.login for m in self.gh.get_organization(o).get_members()
+            #         for o in set(r.split('/')[0] for r in repos)
+            #     ),
+            #     []
+            # )))
+        self.members = members
 
     def get_repo_status(self, repo):
         retrieve = (
@@ -115,7 +129,7 @@ class DataLadHealth(object):
         now = datetime.utcnow()
         dayscovered = (now - self.issues_since).days
 
-        print(f'#### DataLad Health Update')
+        print(f'#### {self.project} Health Update')
         print(f'##### Covered projects (PRs/issues/stars/watchers/forks)')
         print('; '.join(
             f"[{k.split('/')[-1].replace('datalad-', 'dl-')}](https://github.com/{k})"
@@ -127,10 +141,10 @@ class DataLadHealth(object):
 
         non_dl_issues = [
             i for i in self.active_issues
-            if i.state == 'open' and i.user.login not in self.datalad_members
+            if i.state == 'open' and i.user.login not in self.members
         ]
         if non_dl_issues:
-            print('##### Non-DataLad member issues active/opened in the last '
+            print(f'##### Non-{self.project} member issues active/opened in the last '
                   f'{dayscovered} days')
             for i in sorted(non_dl_issues, key=lambda x: x.number):
                 age = now - i.created_at
@@ -235,10 +249,12 @@ def get_by_counts(iter, attr):
 
 
 if __name__ == '__main__':
-    dh = DataLadHealth(
+    dh = HealthReport(
         os.environ['GITHUB_TOKEN'],
         basepath=sys.argv[1] if len(sys.argv) > 1 else None,
+        project="DataLad",
         repos=repos,
+        members=members,
     )
     dh.main()
     dh.render_matrix_summary()
