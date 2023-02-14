@@ -7,33 +7,83 @@ from github import Github
 from pathlib import Path
 from pprint import pprint
 
-repos = (
+project = "CON"
+
+our_repos = (
+    'con/catenate',
+    'con/centerforopenneuroscience.org',
+    'con/fscacher',
+    'con/noisseur',
+    'con/solidation',
+    'con/tinuous',
+    'con/tributors',
+    'con/versations',
+    'dandi/dandi-api-webshots-tools',
+    'dandi/dandi-archive',
+    'dandi/dandi-cli',
+    'dandi/dandi-hub',
+    'dandi/dandi-schema',
+    'dandi/dandisets',
+    'dandi/dandisets-healthstatus',
+    'dandi/example-notebooks',
+    'dandi/handbook',
+    'dandi/helpdesk',
+    'dandi/zarr_checksum',
     'datalad/datalad',
-    'datalad/datalad-gooey',
     'datalad/datalad-container',
-    'datalad/datalad-deprecated',
-    'datalad/datalad-metalad',
-    'datalad/datalad-fuse',
-    'datalad/datalad-catalog',
-    'datalad/datalad-neuroimaging',
-    'datalad/datalad-ukbiobank',
-    'datalad/datalad-installer',
-    'datalad/datalad-osf',
     'datalad/datalad-crawler',
-    'datalad/datalad-xnat',
-    'datalad/datalad-next',
-    'datalad/datalad-dataverse',
-    'datalad/datalad-ebrains',
+    'datalad/datalad-deprecated',
     'datalad/datalad-fuse',
+    'datalad/datalad-installer',
+    'datalad/datalad-neuroimaging',
+    'datalad/datalad-registry',
     'datalad/datasets.datalad.org',
-    'datalad/datalad.org',
-    'mih/datalad-mihextras',
-    'psychoinformatics-de/datalad-debian',
+    'datalad/git-annex',
+    'neurodebian/dockerfiles',
+    'neurodebian/neurodebian',
+    'nipy/heudiconv',
+    'ReproNim/containers',
+    'ReproNim/reproin',
+    'ReproNim/reproman',
+    'ReproNim/reprostim',
 )
 
+# really external but where we are involved/maintainers etc
+external_repos = (
+    'bids-standard/bids-specification',  # yarikoptic, TheChymera
+    'DanielDent/git-annex-remote-rclone',  # yarikoptic
+    'TheChymera/neuralynx_nwb',  # TheChymera, yarikoptic
+)
+
+# not including those for now but want to list since we need to account for work
+# in them but not really care about any issues
+very_external_repos = (
+    'NeurodataWithoutBorders/matnwb'
+    'NeurodataWithoutBorders/pynwb',
+    'hdmf-dev/hdmf',
+    'fsspec/filesystem_spec',
+)
+
+# packaging feedstocks -- we need to be alerted and keep them clean etc
+packaging = (
+    'conda-forge/annexremote-feedstock',
+    'conda-forge/dandi-feedstock',
+    'conda-forge/git-annex-feedstock',
+)
+
+# TODO: we might need to provide some kind of groupping/different handling later on,
+# as we are not responsible for **all** the issues in external repos
+repos = our_repos + external_repos + packaging
+# + very_external_repos
+
+
 members = (
-    'adswa', 'yarikoptic', 'mih', 'jsheunis', 'jwodder', 'bpoldrack',
-    'christian-monch', 'mslw', 'kyleam',
+    'yarikoptic', 'andycon', 'jwodder', 'TheChymera', 'asmacdo', 'candleindark',
+    # consultants, I will just add them in as well
+    'joeyh', 'vmdocua',
+    # - vsoch? for con/tributors etc?
+    # - Vasyl might not be on github, only on Debian gitlab
+    # and we are not monitoring there yet  https://salsa.debian.org/basilgello
 )
 
 
@@ -252,7 +302,7 @@ if __name__ == '__main__':
     dh = HealthReport(
         os.environ['GITHUB_TOKEN'],
         basepath=sys.argv[1] if len(sys.argv) > 1 else None,
-        project="DataLad",
+        project=project,
         repos=repos,
         members=members,
     )
