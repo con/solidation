@@ -71,7 +71,7 @@ packaging = (
     'conda-forge/git-annex-feedstock',
 )
 
-# TODO: we might need to provide some kind of groupping/different handling later on,
+# TODO: we might need to provide some kind of grouping/different handling later on,
 # as we are not responsible for **all** the issues in external repos
 repos = our_repos + external_repos + packaging
 # + very_external_repos
