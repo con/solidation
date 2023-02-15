@@ -10,6 +10,7 @@ from random import sample
 from statistics import quantiles
 from typing import TYPE_CHECKING, Any, List
 import click
+from click_loglevel import LogLevel
 from github import Github
 from github.Issue import Issue
 from github.PullRequest import PullRequest
@@ -294,11 +295,18 @@ def ensure_aware(dt: datetime) -> datetime:
     help="Read configuration from the given file",
     show_default=True,
 )
-def main(config: Path) -> None:
+@click.option(
+    "-l",
+    "--log-level",
+    type=LogLevel(),
+    default=logging.INFO,
+    help="Set logging level  [default: INFO]",
+)
+def main(config: Path, log_level: int) -> None:
     logging.basicConfig(
         format="%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
         datefmt="%Y-%m-%dT%H:%M:%S%z",
-        level=logging.INFO,
+        level=log_level,
     )
     log.info("solidation %s", __version__)
     with config.open() as fp:
