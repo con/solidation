@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from random import sample
 from statistics import quantiles
-from typing import Any, List
+from typing import TYPE_CHECKING, Any, List
 import click
 from github import Github
 from github.Issue import Issue
@@ -19,8 +19,12 @@ from . import __version__
 
 log = logging.getLogger("solidation")
 
-GHUser = constr(regex=r"^[-_A-Za-z0-9]+$")
-GHRepo = constr(regex=r"^[-_A-Za-z0-9]+/[-_.A-Za-z0-9]+$")
+if TYPE_CHECKING:
+    GHUser = str
+    GHRepo = str
+else:
+    GHUser = constr(regex=r"^[-_A-Za-z0-9]+$")
+    GHRepo = constr(regex=r"^[-_A-Za-z0-9]+/[-_.A-Za-z0-9]+$")
 
 
 class Configuration(BaseModel):
@@ -40,7 +44,7 @@ class Consolidator:
     def __post_init__(self, token: str) -> None:
         self.gh = Github(token)
         self.since = datetime.now(timezone.utc) - timedelta(
-            DAYS=self.config.recent_days
+            days=self.config.recent_days
         )
 
     def run(self) -> Report:
@@ -51,11 +55,11 @@ class Consolidator:
         open_ip = []
         for rn in self.config.repositories:
             details = self.process_repo(rn)
-            self.repostats[rn] = details
-            self.open_prs.extend(details.open_prs)
-            self.active_issues.extend(details.active_issues)
-            self.active_prs.extend(details.active_prs)
-            self.open_ip.extend(details.open_ip)
+            repostats[rn] = details
+            open_prs.extend(details.open_prs)
+            active_issues.extend(details.active_issues)
+            active_prs.extend(details.active_prs)
+            open_ip.extend(details.open_ip)
         return Report(
             config=self.config,
             repostats=repostats,
@@ -115,11 +119,11 @@ class Report:
     # Open issues and PRs:
     open_ip: list[Issue]
 
-    def get_issue_commenter_count(self) -> Counter[str]:
-        commenters = Counter()
+    def get_issue_commenter_count(self, since: datetime) -> Counter[str]:
+        commenters: Counter[str] = Counter()
         for i in self.active_issues:
             for c in i.get_comments():
-                if self.since > ensure_aware(c.created_at):
+                if since > ensure_aware(c.created_at):
                     # does not fall into the reporting window
                     continue
                 commenters[c.user.login] += 1
@@ -128,7 +132,7 @@ class Report:
     def to_markdown(self) -> str:
         now = datetime.now(timezone.utc)
         dayscovered = self.config.recent_days
-        since = now - timedelta(DAYS=dayscovered)
+        since = now - timedelta(days=dayscovered)
 
         s = f"#### {self.config.project} Health Update\n"
         s += "##### Covered projects (PRs/issues/stars/watchers/forks)\n"
@@ -146,7 +150,7 @@ class Report:
         outsider_issues = [
             i
             for i in self.active_issues
-            if i.state == "open" and i.user.login not in self.members
+            if i.state == "open" and i.user.login not in self.config.members
         ]
         if outsider_issues:
             s += (
@@ -176,7 +180,7 @@ class Report:
         if untriaged_issues:
             s += "##### Untriaged issues of the last {dayscovered} days\n"
             for i in sorted(untriaged_issues, key=lambda x: x.created_at):
-                s + +f"- [{i.title}]({i.html_url}) [{i.repository.full_name}]\n"
+                s += f"- [{i.title}]({i.html_url}) [{i.repository.full_name}]\n"
 
         s += (
             f"##### Max 10 oldest, open, non-draft PRs ({len(self.open_prs)}"
@@ -208,7 +212,7 @@ class Report:
             "- Commenters: "
             + ", ".join(
                 f"{user} ({qty})"
-                for user, qty in self.get_issue_commenter_count().most_common()
+                for user, qty in self.get_issue_commenter_count(since).most_common()
             )
             + "\n"
         )
@@ -255,11 +259,11 @@ class Report:
                 )
             pr_durations = [(i.merged_at - i.created_at).days for i in merged_prs]
             s += f"- PR duration quantiles (days): {quantiles(pr_durations)}\n"
-            return s
+        return s
 
 
 def get_by_counts(iterable: Iterable[Any], attr: str) -> Counter[str]:
-    counts = Counter()
+    counts: Counter[str] = Counter()
     for i in iterable:
         name = getattr(i, attr).login
         counts[name] += 1
