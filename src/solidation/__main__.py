@@ -192,16 +192,24 @@ class Report:
             age = now - ensure_aware(pr.created_at)
             s += f"- [{pr.title}]({pr.html_url}) ({age.days} days)\n"
 
-        open_issues = [i for i in self.open_ip if i.pull_request is None]
-        n_random_ip = min(5, len(open_issues))
+        n_random_ip = min(5, len(self.open_ip))
         if n_random_ip:
             s += (
                 f"##### {n_random_ip} random open issues to fix (of a total of"
-                f" {len(open_issues)})\n"
+                f" {len(self.open_ip)})\n"
             )
-            for i in sample(open_issues, n_random_ip):
-                age = now - ensure_aware(i.created_at)
+            # Shuffle self.open_ip without changing the original list:
+            for i in sample(self.open_ip, len(self.open_ip)):
+                if i.pull_request is not None:
+                    # Note: Trying to do this filtering on all issues before
+                    # shuffling apparently results in an API request for each
+                    # issue, which slows things down considerably.
+                    continue
+                age = now - ensure_aware(i.created_at)  # type: ignore[unreachable]
                 s += f"- [{i.title}]({i.html_url}) ({age.days} days old)\n"
+                n_random_ip -= 1
+                if n_random_ip == 0:
+                    break
 
         s += (
             f"##### Active issues in the past {dayscovered} days: "
