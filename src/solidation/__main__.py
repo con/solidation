@@ -14,6 +14,7 @@ from click_loglevel import LogLevel
 from github import Github
 from github.Issue import Issue
 from github.PullRequest import PullRequest
+from github.Repository import Repository
 from pydantic import BaseModel, Field, constr
 from ruamel.yaml import YAML
 from . import __version__
@@ -31,7 +32,12 @@ else:
 class Configuration(BaseModel):
     project: str = "Project"
     recent_days: int = Field(default=7, ge=1)
-    repositories: List[GHRepo]
+    # Note: If & when we add support for excluding repositories from under
+    # organizations, that can be done by setting the type of `organizations` to
+    # `List[Union[GHUser, OrgSpec]]` where `OrgSpec` has `name`, `exclude`,
+    # etc. fields.
+    organizations: List[GHUser] = Field(default_factory=list)
+    repositories: List[GHRepo] = Field(default_factory=list)
     members: List[GHUser]
     num_oldest_prs: int = Field(default=10, ge=1)
     max_random_issues: int = Field(default=5, ge=1)
@@ -51,30 +57,20 @@ class Consolidator:
         )
 
     def run(self) -> Report:
-        repostats = {}
-        open_prs = []
-        active_issues = []
-        active_prs = []
-        open_ip = []
+        report = Report(config=self.config)
+        for orgname in self.config.organizations:
+            log.info("Processing org %s", orgname)
+            for repo in self.gh.get_organization(orgname).get_repos(type="all"):
+                report.add_repo_details(self.repo2details(repo))
         for rn in self.config.repositories:
-            details = self.process_repo(rn)
-            repostats[rn] = details
-            open_prs.extend(details.open_prs)
-            active_issues.extend(details.active_issues)
-            active_prs.extend(details.active_prs)
-            open_ip.extend(details.open_ip)
-        return Report(
-            config=self.config,
-            repostats=repostats,
-            open_prs=open_prs,
-            active_issues=active_issues,
-            active_prs=active_prs,
-            open_ip=open_ip,
-        )
+            if rn not in report.repostats:
+                log.debug("Fetching repo %s", rn)
+                repo = self.gh.get_repo(rn)
+                report.add_repo_details(self.repo2details(repo))
+        return report
 
-    def process_repo(self, reponame: str) -> RepoDetails:
-        log.info("Processing repo %s", reponame)
-        repo = self.gh.get_repo(reponame)
+    def repo2details(self, repo: Repository) -> RepoDetails:
+        log.info("Processing repo %s", repo.full_name)
         active_ip = repo.get_issues(state="all", since=self.since)
         return RepoDetails(
             full_name=repo.full_name,
@@ -115,12 +111,23 @@ class RepoDetails:
 @dataclass
 class Report:
     config: Configuration
-    repostats: dict[str, RepoDetails]
-    open_prs: list[PullRequest]
-    active_issues: list[Issue]
-    active_prs: list[Issue]
+    repostats: dict[str, RepoDetails] = field(default_factory=dict)
+    open_prs: list[PullRequest] = field(default_factory=list)
+    active_issues: list[Issue] = field(default_factory=list)
+    active_prs: list[Issue] = field(default_factory=list)
     # Open issues and PRs:
-    open_ip: list[Issue]
+    open_ip: list[Issue] = field(default_factory=list)
+
+    def add_repo_details(self, details: RepoDetails) -> None:
+        if details.full_name in self.repostats:
+            # Check here in addition to in `run()` above in case the repo was
+            # moved under an organization.
+            return
+        self.repostats[details.full_name] = details
+        self.open_prs.extend(details.open_prs)
+        self.active_issues.extend(details.active_issues)
+        self.active_prs.extend(details.active_prs)
+        self.open_ip.extend(details.open_ip)
 
     def get_issue_commenter_count(self, since: datetime) -> Counter[str]:
         commenters: Counter[str] = Counter()
