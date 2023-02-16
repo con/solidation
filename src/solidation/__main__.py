@@ -33,6 +33,8 @@ class Configuration(BaseModel):
     recent_days: int = Field(default=7, ge=1)
     repositories: List[GHRepo]
     members: List[GHUser]
+    num_oldest_prs: int = Field(default=10, ge=1)
+    max_random_issues: int = Field(default=5, ge=1)
 
 
 @dataclass
@@ -184,16 +186,16 @@ class Report:
                 s += f"- [{i.title}]({i.html_url}) [{i.repository.full_name}]\n"
 
         s += (
-            f"##### Max 10 oldest, open, non-draft PRs ({len(self.open_prs)}"
-            " PRs open in total)\n"
+            f"##### Max {self.config.num_oldest_prs} oldest, open, non-draft"
+            f" PRs ({len(self.open_prs)} PRs open in total)\n"
         )
         for pr in sorted(
             (p for p in self.open_prs if not p.draft), key=lambda x: x.created_at
-        )[:10]:
+        )[: self.config.num_oldest_prs]:
             age = now - ensure_aware(pr.created_at)
             s += f"- [{pr.title}]({pr.html_url}) ({age.days} days)\n"
 
-        n_random_ip = min(5, len(self.open_ip))
+        n_random_ip = min(self.config.max_random_issues, len(self.open_ip))
         if n_random_ip:
             s += (
                 f"##### {n_random_ip} random open issues to fix (of a total of"
