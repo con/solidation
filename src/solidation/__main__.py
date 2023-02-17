@@ -188,7 +188,7 @@ class Report:
             if i.state == "open" and i.comments < 1 and not i.labels
         ]
         if untriaged_issues:
-            s += "##### Untriaged issues of the last {dayscovered} days\n"
+            s += f"##### Untriaged issues of the last {dayscovered} days\n"
             for i in sorted(untriaged_issues, key=lambda x: x.created_at):
                 s += f"- [{i.title}]({i.html_url}) [{i.repository.full_name}]\n"
 
