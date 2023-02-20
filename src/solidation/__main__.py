@@ -8,14 +8,14 @@ import os
 from pathlib import Path
 from random import sample
 from statistics import quantiles
-from typing import TYPE_CHECKING, Any, List
+from typing import TYPE_CHECKING, Any, List, Pattern, Union
 import click
 from click_loglevel import LogLevel
 from github import Github
 from github.Issue import Issue
 from github.PullRequest import PullRequest
 from github.Repository import Repository
-from pydantic import BaseModel, Field, constr
+from pydantic import BaseModel, Field, StrictBool, constr
 from ruamel.yaml import YAML
 from . import __version__
 
@@ -29,16 +29,23 @@ else:
     GHRepo = constr(regex=r"^[-_A-Za-z0-9]+/[-_.A-Za-z0-9]+$")
 
 
+class OrgSpec(BaseModel):
+    name: GHUser
+    fetch_members: Union[StrictBool, Pattern] = False
+
+    def member_fetched(self, user: str) -> bool:
+        if isinstance(self.fetch_members, bool):
+            return self.fetch_members
+        else:
+            return bool(self.fetch_members.match(user))
+
+
 class Configuration(BaseModel):
     project: str = "Project"
     recent_days: int = Field(default=7, ge=1)
-    # Note: If & when we add support for excluding repositories from under
-    # organizations, that can be done by setting the type of `organizations` to
-    # `List[Union[GHUser, OrgSpec]]` where `OrgSpec` has `name`, `exclude`,
-    # etc. fields.
-    organizations: List[GHUser] = Field(default_factory=list)
+    organizations: List[Union[GHUser, OrgSpec]] = Field(default_factory=list)
     repositories: List[GHRepo] = Field(default_factory=list)
-    members: List[GHUser]
+    members: List[GHUser] = Field(default_factory=list)
     num_oldest_prs: int = Field(default=10, ge=1)
     max_random_issues: int = Field(default=5, ge=1)
 
@@ -58,15 +65,26 @@ class Consolidator:
 
     def run(self) -> Report:
         report = Report(config=self.config)
-        for orgname in self.config.organizations:
+        members = set(self.config.members)
+        for orgspec in self.config.organizations:
+            orgname = orgspec if isinstance(orgspec, str) else orgspec.name
             log.info("Processing org %s", orgname)
-            for repo in self.gh.get_organization(orgname).get_repos(type="all"):
+            org = self.gh.get_organization(orgname)
+            for repo in org.get_repos(type="all"):
                 report.add_repo_details(self.repo2details(repo))
+            if isinstance(orgspec, OrgSpec) and orgspec.fetch_members is not False:
+                log.info("Fetching members of %s", orgname)
+                for user in org.get_members():
+                    login = user.login
+                    if orgspec.member_fetched(login) and login not in members:
+                        members.add(login)
+                        log.info("Added member %s", login)
         for rn in self.config.repositories:
             if rn not in report.repostats:
                 log.debug("Fetching repo %s", rn)
                 repo = self.gh.get_repo(rn)
                 report.add_repo_details(self.repo2details(repo))
+        self.config.members = list(members)
         return report
 
     def repo2details(self, repo: Repository) -> RepoDetails:
