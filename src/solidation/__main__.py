@@ -113,7 +113,7 @@ class Consolidator:
                 )
         for repospec in self.config.get_repo_specs():
             if repospec.name not in report.repostats:
-                log.debug("Fetching repo %s", repospec.name)
+                log.info("Fetching repo %s", repospec.name)
                 repo = self.gh.get_repo(repospec.name)
                 report.add_repo_details(
                     self.repo2details(
