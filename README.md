@@ -1,7 +1,89 @@
-# solidation
-Produce activities report from github
+`solidation` is a Python program for producing a Markdown report of recent
+issue & pull request activity across a set of GitHub repositories.
 
-# Random example -- DataLad "today"
+# Usage
+
+    solidation [<options>]
+
+`solidation` reads from a configuration file (`solidation.yaml` by default,
+though a different one can be specified with the `-c`/`--config` option) and
+outputs a Markdown report to standard output.  It is recommended to set a
+GitHub API token to use for API requests via the `GITHUB_TOKEN` environment
+variable.
+
+## Options
+
+- `-c <FILE>`, `--config <FILE>` — Specify the configuration file to use;
+  defaults to `solidation.yaml`.  See "Configuration" below for details.
+
+- `-l <LEVEL>`, `--log-level <LEVEL>` — Set the log level to the given value.
+  Possible values are "`CRITICAL`", "`ERROR`", "`WARNING`", "`INFO`", "`DEBUG`"
+  (all case-insensitive) and their Python integer equivalents.  [default value:
+  INFO]
+
+
+# Configuration
+
+The configuration file is a YAML file containing a mapping with the following
+keys (all optional):
+
+- `project` (string) — The name of the project to which the detailed
+  repositories belong, used in the header of the report; defaults to "Project".
+
+- `repositories` (list of mappings) — A list of repositories for which to fetch
+  recent issue & pull request activity.  Each repository is specified as a
+  mapping with the following fields:
+
+    - `name` (string; required) — The name of the GitHub repository, in the
+      form "OWNER/NAME"
+    - `member_activity_only` (boolean) — Whether to restrict the issues & pull
+      requests fetched for this repository to just those created or assigned to
+      users listed in (or automatically added to) `members`; defaults to
+      `false`
+
+    As a convenience, a repository may instead be specified as just a string of
+    the form "OWNER/NAME", which is equivalent to specifying a mapping with
+    that as the `name` and the default values for all other fields.
+
+- `organizations` (list of mappings) — A list of GitHub organizations whose
+  repositories will all have their recent issue & pull request activity
+  fetched.  Each organization is specified as a mapping with the following
+  fields:
+
+    - `name` (string; required) — The name of the GitHub organization
+    - `fetch_members` (boolean or regex) — Whether to automatically add the
+      organization's members to the `members` list; a value of `False` (the
+      default) means to not add any members, a value of `True` means to add all
+      members, and a regex value means to add those members whose login names
+      match the given regex (anchored at the start)
+    - `member_activity_only` (boolean) — Whether to restrict the issues & pull
+      requests fetched for this organization's repositories to just those
+      created or assigned to users listed in (or automatically added to)
+      `members`; defaults to `false`
+
+    As a convenience, an organization may instead be specified as just a
+    string, which is equivalent to specifying a mapping with that as the `name`
+    and the default values for all other fields.
+
+- `members` (list of strings) — A list of the login names of GitHub users that
+  should be considered part of the project being reported on; this can be
+  automatically extended with one or more organizations' members by setting
+  those organizations' `fetch_members` fields appropriately.  The list of
+  members is used to filter out issues for the "Non-{project} member issues"
+  section and to filter activity for repositories & organizations for which
+  `member_activity_only` is true.
+
+- `recent_days` (integer) — The number of days to look back for recent issue &
+  pull request activity; defaults to 7.
+
+- `num_oldest_prs` (integer) — Number of pull requests to list for the "oldest,
+  open, non-draft PRs" section; defaults to 10.
+
+- `max_random_issues` (integer) — Maximum number of issues to list for the
+  "random open issues to fix" section; defaults to 5.
+
+
+# Example Output
 
 #### DataLad Health Update
 ##### Covered projects (PRs/issues/stars/watchers/forks)
