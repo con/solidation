@@ -313,7 +313,8 @@ class Report:
             closed_age = [
                 (i.closed_at - i.created_at).days for i in recent_closed_issues
             ]
-            s += f"- Age quantiles (days): {quantiles(closed_age)}\n"
+            if len(closed_age) > 1:
+                s += f"- Age quantiles (days): {quantiles(closed_age)}\n"
             s += (
                 "- Closed by: "
                 + ", ".join(
@@ -345,7 +346,8 @@ class Report:
                     + "\n"
                 )
             pr_durations = [(i.merged_at - i.created_at).days for i in merged_prs]
-            s += f"- PR duration quantiles (days): {quantiles(pr_durations)}\n"
+            if len(pr_durations) > 1:
+                s += f"- PR duration quantiles (days): {quantiles(pr_durations)}\n"
         return s
 
 
