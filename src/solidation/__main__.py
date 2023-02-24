@@ -1,6 +1,6 @@
 from __future__ import annotations
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from dataclasses import InitVar, dataclass, field
 from datetime import datetime, timedelta, timezone
 import logging
@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from random import sample
 from statistics import quantiles
-from typing import TYPE_CHECKING, Any, List, Pattern, Union
+from typing import TYPE_CHECKING, Any, List, Pattern, Set, Union
 import click
 from click_loglevel import LogLevel
 from github import Github
@@ -29,9 +29,15 @@ else:
     GHRepo = constr(regex=r"^[-_A-Za-z0-9]+/[-_.A-Za-z0-9]+$")
 
 
+class RepoSpec(BaseModel):
+    name: GHRepo
+    member_activity_only: bool = False
+
+
 class OrgSpec(BaseModel):
     name: GHUser
     fetch_members: Union[StrictBool, Pattern] = False
+    member_activity_only: bool = False
 
     def member_fetched(self, user: str) -> bool:
         if isinstance(self.fetch_members, bool):
@@ -44,10 +50,24 @@ class Configuration(BaseModel):
     project: str = "Project"
     recent_days: int = Field(default=7, ge=1)
     organizations: List[Union[GHUser, OrgSpec]] = Field(default_factory=list)
-    repositories: List[GHRepo] = Field(default_factory=list)
-    members: List[GHUser] = Field(default_factory=list)
+    repositories: List[Union[GHRepo, RepoSpec]] = Field(default_factory=list)
+    members: Set[GHUser] = Field(default_factory=set)
     num_oldest_prs: int = Field(default=10, ge=1)
     max_random_issues: int = Field(default=5, ge=1)
+
+    def get_org_specs(self) -> Iterator[OrgSpec]:
+        for org in self.organizations:
+            if isinstance(org, str):
+                yield OrgSpec(name=org)
+            else:
+                yield org
+
+    def get_repo_specs(self) -> Iterator[RepoSpec]:
+        for repo in self.repositories:
+            if isinstance(repo, str):
+                yield RepoSpec(name=repo)
+            else:
+                yield repo
 
 
 @dataclass
@@ -65,31 +85,62 @@ class Consolidator:
 
     def run(self) -> Report:
         report = Report(config=self.config)
-        members = set(self.config.members)
-        for orgspec in self.config.organizations:
-            orgname = orgspec if isinstance(orgspec, str) else orgspec.name
-            log.info("Processing org %s", orgname)
-            org = self.gh.get_organization(orgname)
-            for repo in org.get_repos(type="all"):
-                report.add_repo_details(self.repo2details(repo))
-            if isinstance(orgspec, OrgSpec) and orgspec.fetch_members is not False:
-                log.info("Fetching members of %s", orgname)
+        org_cache = {}
+        for orgspec in self.config.get_org_specs():
+            if orgspec.fetch_members is not False:
+                log.info("Fetching members of %s", orgspec.name)
+                org = self.gh.get_organization(orgspec.name)
+                org_cache[orgspec.name] = org
                 for user in org.get_members():
                     login = user.login
-                    if orgspec.member_fetched(login) and login not in members:
-                        members.add(login)
+                    if (
+                        orgspec.member_fetched(login)
+                        and login not in self.config.members
+                    ):
+                        self.config.members.add(login)
                         log.info("Added member %s", login)
-        for rn in self.config.repositories:
-            if rn not in report.repostats:
-                log.debug("Fetching repo %s", rn)
-                repo = self.gh.get_repo(rn)
-                report.add_repo_details(self.repo2details(repo))
-        self.config.members = list(members)
+        for orgspec in self.config.get_org_specs():
+            log.info("Processing org %s", orgspec.name)
+            try:
+                org = org_cache[orgspec.name]
+            except KeyError:
+                org = self.gh.get_organization(orgspec.name)
+            for repo in org.get_repos(type="all"):
+                report.add_repo_details(
+                    self.repo2details(
+                        repo, member_activity_only=orgspec.member_activity_only
+                    )
+                )
+        for repospec in self.config.get_repo_specs():
+            if repospec.name not in report.repostats:
+                log.info("Fetching repo %s", repospec.name)
+                repo = self.gh.get_repo(repospec.name)
+                report.add_repo_details(
+                    self.repo2details(
+                        repo, member_activity_only=repospec.member_activity_only
+                    )
+                )
         return report
 
-    def repo2details(self, repo: Repository) -> RepoDetails:
+    def repo2details(
+        self, repo: Repository, member_activity_only: bool = False
+    ) -> RepoDetails:
         log.info("Processing repo %s", repo.full_name)
-        active_ip = repo.get_issues(state="all", since=self.since)
+
+        open_prs = list(repo.get_pulls(state="open"))
+        active_ip = list(repo.get_issues(state="all", since=self.since))
+        open_ip = list(repo.get_issues(state="open"))
+
+        if member_activity_only:
+
+            def accept(obj: Issue | PullRequest) -> bool:
+                return obj.user.login in self.config.members or any(
+                    u.login in self.config.members for u in obj.assignees
+                )
+
+            open_prs = list(filter(accept, open_prs))
+            active_ip = list(filter(accept, active_ip))
+            open_ip = list(filter(accept, open_ip))
         return RepoDetails(
             full_name=repo.full_name,
             size=repo.size,
@@ -99,10 +150,10 @@ class Consolidator:
             open_issues_count=repo.open_issues_count,
             network_count=repo.network_count,
             subscribers_count=repo.subscribers_count,
-            open_prs=list(repo.get_pulls(state="open")),
+            open_prs=open_prs,
             active_prs=[i for i in active_ip if i.pull_request],
             active_issues=[i for i in active_ip if i.pull_request is None],
-            open_ip=list(repo.get_issues(state="open")),
+            open_ip=open_ip,
         )
 
 
@@ -262,7 +313,8 @@ class Report:
             closed_age = [
                 (i.closed_at - i.created_at).days for i in recent_closed_issues
             ]
-            s += f"- Age quantiles (days): {quantiles(closed_age)}\n"
+            if len(closed_age) > 1:
+                s += f"- Age quantiles (days): {quantiles(closed_age)}\n"
             s += (
                 "- Closed by: "
                 + ", ".join(
@@ -294,7 +346,8 @@ class Report:
                     + "\n"
                 )
             pr_durations = [(i.merged_at - i.created_at).days for i in merged_prs]
-            s += f"- PR duration quantiles (days): {quantiles(pr_durations)}\n"
+            if len(pr_durations) > 1:
+                s += f"- PR duration quantiles (days): {quantiles(pr_durations)}\n"
         return s
 
 
