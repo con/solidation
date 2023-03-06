@@ -237,8 +237,11 @@ class Report:
                 f" in the last {dayscovered} days\n"
             )
             for i in sorted(outsider_issues, key=lambda x: x.number):
+                user = i.user.name
+                if user is None:
+                    user = i.user.login
                 s += (
-                    f"- [{i.title}]({i.html_url}) by {i.user.name}"
+                    f"- [{i.title}]({i.html_url}) by {user}"
                     f" [{i.repository.full_name}]\n"
                 )
 
