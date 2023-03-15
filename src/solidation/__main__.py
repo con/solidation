@@ -9,6 +9,7 @@ from pathlib import Path
 from random import sample
 from statistics import quantiles
 from typing import TYPE_CHECKING, Any, List, Pattern, Set, Union
+from urllib.parse import quote
 import click
 from click_loglevel import LogLevel
 from github import Github
@@ -351,6 +352,56 @@ class Report:
             pr_durations = [(i.merged_at - i.created_at).days for i in merged_prs]
             if len(pr_durations) > 1:
                 s += f"- PR duration quantiles (days): {quantiles(pr_durations)}\n"
+
+        if self.config.members:
+            s += "##### Issues & PRs assigned to each member:\n"
+            for user in sorted(self.config.members):
+                open_qty = sum(
+                    1
+                    for ip in self.open_ip
+                    if any(u.login == user for u in ip.assignees)
+                )
+                open_pr_qty = sum(
+                    1
+                    for pr in self.open_prs
+                    if any(u.login == user for u in pr.assignees)
+                )
+                open_issue_qty = open_qty - open_pr_qty
+                blocked_qty = sum(
+                    1
+                    for ip in self.open_ip
+                    if any(u.login == user for u in ip.assignees)
+                    and any(lbl.name == "blocked" for lbl in ip.labels)
+                )
+                new_assigned_qty = 0
+                new_closed_qty = 0
+                for ip in self.active_issues + self.active_prs:
+                    if any(u.login == user for u in ip.assignees):
+                        if ensure_aware(ip.created_at) >= since:
+                            new_assigned_qty += 1
+                        if (
+                            ip.closed_at is not None
+                            and ensure_aware(ip.closed_at) >= since
+                        ):
+                            new_closed_qty += 1
+                since_query = quote(since.isoformat(timespec="seconds"))
+                s += (
+                    f"- [{user}](https://github.com/{user}):"
+                    f" [{open_qty}](https://github.com/issues?"
+                    f"q=assignee%3A{user}+is%3Aopen)"
+                    f" = [{open_issue_qty} issues](https://github.com/issues?"
+                    f"q=assignee%3A{user}+is%3Aopen+type%3Aissue)"
+                    f"/[{open_pr_qty} PRs](https://github.com/pulls?"
+                    f"q=assignee%3A{user}+is%3Aopen);"
+                    f" [{blocked_qty} blocked](https://github.com/issues?"
+                    f"q=assignee%3A{user}+is%3Aopen+label%3A%22blocked%22)"
+                    f" [+{new_assigned_qty}](https://github.com/issues?"
+                    f"q=assignee%3A{user}+created%3A%3E{since_query})"
+                    f"/[-{new_closed_qty}](https://github.com/issues?"
+                    f"q=assignee%3A{user}+closed%3A%3E{since_query})"
+                    "\n"
+                )
+
         return s
 
 
