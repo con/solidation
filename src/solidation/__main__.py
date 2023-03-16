@@ -356,17 +356,21 @@ class Report:
         if self.config.members:
             s += "##### Issues & PRs assigned to each member:\n"
             for user in sorted(self.config.members):
-                open_qty = sum(
+                open_issue_qty = sum(
                     1
                     for ip in self.open_ip
                     if any(u.login == user for u in ip.assignees)
+                    and ip.pull_request is None
                 )
-                open_pr_qty = sum(
+                open_authored_pr_qty = sum(
+                    1 for pr in self.open_prs if pr.user.login == user
+                )
+                open_assigned_pr_qty = sum(
                     1
                     for pr in self.open_prs
                     if any(u.login == user for u in pr.assignees)
                 )
-                open_issue_qty = open_qty - open_pr_qty
+                open_qty = open_issue_qty + open_authored_pr_qty + open_assigned_pr_qty
                 blocked_qty = sum(
                     1
                     for ip in self.open_ip
@@ -391,8 +395,10 @@ class Report:
                     f"q=assignee%3A{user}+is%3Aopen)"
                     f" = [{open_issue_qty} issues](https://github.com/issues?"
                     f"q=assignee%3A{user}+is%3Aopen+type%3Aissue)"
-                    f"/[{open_pr_qty} PRs](https://github.com/issues?"
-                    f"q=assignee%3A{user}+is%3Aopen+is%3Apr);"
+                    f"/([{open_assigned_pr_qty}](https://github.com/issues?"
+                    f"q=assignee%3A{user}+is%3Aopen+is%3Apr)"
+                    f"+ [{open_authored_pr_qty}](https://github.com/issues?"
+                    f"q=author%3A{user}+is%3Aopen+is%3Apr)) PRs;"
                     f" [{blocked_qty} blocked](https://github.com/issues?"
                     f"q=assignee%3A{user}+is%3Aopen+label%3A%22blocked%22)"
                     f" [+{new_assigned_qty}](https://github.com/issues?"
