@@ -3,9 +3,11 @@ from collections import Counter
 from collections.abc import Iterable, Iterator
 from dataclasses import InitVar, dataclass, field
 from datetime import datetime, timedelta, timezone
+import importlib.metadata
 import logging
 import os
 from pathlib import Path
+import platform
 from random import sample
 import re
 from statistics import quantiles
@@ -19,9 +21,18 @@ from github.PullRequest import PullRequest
 from github.Repository import Repository
 from pydantic import BaseModel, Field, StrictBool, StringConstraints
 from ruamel.yaml import YAML
-from . import __version__
+from . import __url__, __version__
 
 log = logging.getLogger("solidation")
+
+USER_AGENT = "solidation/{} ({}) PyGithub/{} {}/{}".format(
+    __version__,
+    __url__,
+    importlib.metadata.version("pygithub"),
+    platform.python_implementation(),
+    platform.python_version(),
+)
+
 
 GHUser = Annotated[str, StringConstraints(pattern=r"^[-_A-Za-z0-9]+$")]
 GHRepo = Annotated[str, StringConstraints(pattern=r"^[-_A-Za-z0-9]+/[-_.A-Za-z0-9]+$")]
@@ -76,7 +87,7 @@ class Consolidator:
     since: datetime = field(init=False)
 
     def __post_init__(self, token: str) -> None:
-        self.gh = Github(auth=Auth.Token(token))
+        self.gh = Github(auth=Auth.Token(token), user_agent=USER_AGENT)
         self.since = datetime.now(timezone.utc) - timedelta(
             days=self.config.recent_days
         )
