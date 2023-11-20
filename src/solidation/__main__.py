@@ -7,28 +7,24 @@ import logging
 import os
 from pathlib import Path
 from random import sample
-from re import Pattern
+import re
 from statistics import quantiles
-from typing import TYPE_CHECKING, Any
+from typing import Annotated, Any
 from urllib.parse import quote
 import click
 from click_loglevel import LogLevel
-from github import Github
+from github import Auth, Github
 from github.Issue import Issue
 from github.PullRequest import PullRequest
 from github.Repository import Repository
-from pydantic import BaseModel, Field, StrictBool, constr
+from pydantic import BaseModel, Field, StrictBool, StringConstraints
 from ruamel.yaml import YAML
 from . import __version__
 
 log = logging.getLogger("solidation")
 
-if TYPE_CHECKING:
-    GHUser = str
-    GHRepo = str
-else:
-    GHUser = constr(regex=r"^[-_A-Za-z0-9]+$")
-    GHRepo = constr(regex=r"^[-_A-Za-z0-9]+/[-_.A-Za-z0-9]+$")
+GHUser = Annotated[str, StringConstraints(pattern=r"^[-_A-Za-z0-9]+$")]
+GHRepo = Annotated[str, StringConstraints(pattern=r"^[-_A-Za-z0-9]+/[-_.A-Za-z0-9]+$")]
 
 
 class RepoSpec(BaseModel):
@@ -38,7 +34,7 @@ class RepoSpec(BaseModel):
 
 class OrgSpec(BaseModel):
     name: GHUser
-    fetch_members: StrictBool | Pattern = False
+    fetch_members: StrictBool | re.Pattern[str] = False
     member_activity_only: bool = False
 
     def member_fetched(self, user: str) -> bool:
@@ -80,7 +76,7 @@ class Consolidator:
     since: datetime = field(init=False)
 
     def __post_init__(self, token: str) -> None:
-        self.gh = Github(token)
+        self.gh = Github(auth=Auth.Token(token))
         self.since = datetime.now(timezone.utc) - timedelta(
             days=self.config.recent_days
         )
@@ -339,7 +335,7 @@ class Report:
                 f" {len(recent_closed_prs)}\n"
             )
 
-        merged_prs = [i for i in recent_closed_prs if i.merged_at]
+        merged_prs = [i for i in recent_closed_prs if i.merged_at is not None]
         if merged_prs:
             for label, attr in (("Proposed", "user"), ("Merged", "merged_by")):
                 s += (
@@ -350,7 +346,10 @@ class Report:
                     )
                     + "\n"
                 )
-            pr_durations = [(i.merged_at - i.created_at).days for i in merged_prs]
+            pr_durations = []
+            for pr in merged_prs:
+                assert pr.merged_at is not None
+                pr_durations.append((pr.merged_at - pr.created_at).days)
             if len(pr_durations) > 1:
                 s += f"- PR duration quantiles (days): {quantiles(pr_durations)}\n"
 
@@ -451,7 +450,7 @@ def main(config: Path, log_level: int) -> None:
     )
     log.info("solidation %s", __version__)
     with config.open() as fp:
-        cfg = Configuration.parse_obj(YAML(typ="safe").load(fp))
+        cfg = Configuration.model_validate(YAML(typ="safe").load(fp))
     cs = Consolidator(token=os.environ["GITHUB_TOKEN"], config=cfg)
     report = cs.run()
     print(report.to_markdown(), end="")
