@@ -7,8 +7,9 @@ import logging
 import os
 from pathlib import Path
 from random import sample
+from re import Pattern
 from statistics import quantiles
-from typing import TYPE_CHECKING, Any, List, Pattern, Set, Union
+from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 import click
 from click_loglevel import LogLevel
@@ -37,7 +38,7 @@ class RepoSpec(BaseModel):
 
 class OrgSpec(BaseModel):
     name: GHUser
-    fetch_members: Union[StrictBool, Pattern] = False
+    fetch_members: StrictBool | Pattern = False
     member_activity_only: bool = False
 
     def member_fetched(self, user: str) -> bool:
@@ -50,9 +51,9 @@ class OrgSpec(BaseModel):
 class Configuration(BaseModel):
     project: str = "Project"
     recent_days: int = Field(default=7, ge=1)
-    organizations: List[Union[GHUser, OrgSpec]] = Field(default_factory=list)
-    repositories: List[Union[GHRepo, RepoSpec]] = Field(default_factory=list)
-    members: Set[GHUser] = Field(default_factory=set)
+    organizations: list[GHUser | OrgSpec] = Field(default_factory=list)
+    repositories: list[GHRepo | RepoSpec] = Field(default_factory=list)
+    members: set[GHUser] = Field(default_factory=set)
     num_oldest_prs: int = Field(default=10, ge=1)
     max_random_issues: int = Field(default=5, ge=1)
 
