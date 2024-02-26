@@ -425,8 +425,8 @@ class Report:
 def get_by_counts(iterable: Iterable[Any], attr: str) -> Counter[str]:
     counts: Counter[str] = Counter()
     for i in iterable:
-        name = getattr(i, attr).login
-        counts[name] += 1
+        if (actor := getattr(i, attr, None)) is not None:
+            counts[actor.login] += 1
     return counts
 
 
