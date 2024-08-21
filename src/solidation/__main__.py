@@ -271,7 +271,7 @@ class Report:
         if untriaged_issues:
             s += f"##### Untriaged issues of the last {dayscovered} days\n"
             for i in sorted(untriaged_issues, key=lambda x: x.created_at):
-                s += f"- [{i.title}]({i.html_url}) [{i.repository.full_name}]\n"
+                s += f"- [{sanitize_md(i.title)}]({i.html_url}) [{i.repository.full_name}]\n"
 
         s += (
             f"##### Max {self.config.num_oldest_prs} oldest, open, non-draft"
@@ -297,7 +297,7 @@ class Report:
                     # issue, which slows things down considerably.
                     continue
                 age = now - ensure_aware(i.created_at)  # type: ignore[unreachable]
-                s += f"- [{i.title}]({i.html_url}) ({age.days} days old)\n"
+                s += f"- [{sanitize_md(i.title)}]({i.html_url}) ({age.days} days old)\n"
                 n_random_ip -= 1
                 if n_random_ip == 0:
                     break
