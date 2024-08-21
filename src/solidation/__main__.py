@@ -284,7 +284,7 @@ class Report:
             (p for p in self.open_prs if not p.draft), key=lambda x: x.created_at
         )[: self.config.num_oldest_prs]:
             age = now - ensure_aware(pr.created_at)
-            s += f"- [{pr.title}]({pr.html_url}) ({age.days} days)\n"
+            s += f"- [{sanitize_md(pr.title)}]({pr.html_url}) ({age.days} days)\n"
 
         n_random_ip = min(self.config.max_random_issues, len(self.open_ip))
         if n_random_ip:
