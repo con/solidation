@@ -1,4 +1,4 @@
-from ..__main__ import sanitize_md
+from solidation.__main__ import sanitize_md
 
 
 def test_sanitize_md() -> None:
