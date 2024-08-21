@@ -23,5 +23,5 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install --upgrade tox
 
-      - name: Run type checker
+      - name: Run tests
         run: tox -e py3
