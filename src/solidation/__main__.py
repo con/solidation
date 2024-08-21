@@ -250,7 +250,7 @@ class Report:
                 if user is None:
                     user = i.user.login
                 s += (
-                    f"- [{i.title}]({i.html_url}) by {user}"
+                    f"- [{sanitize_md(i.title)}]({i.html_url}) by {user}"
                     f" [{i.repository.full_name}]\n"
                 )
 
@@ -435,6 +435,11 @@ def ensure_aware(dt: datetime) -> datetime:
     # that's fixed <https://github.com/PyGithub/PyGithub/pull/1831>, we need to
     # make such datetimes timezone-aware manually.
     return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+
+
+def sanitize_md(s: str) -> str:
+    # Remove `[]` symbols to ensure correct markdown in the references
+    return re.sub(r'[\[\]]', '', s)
 
 
 @click.command()
