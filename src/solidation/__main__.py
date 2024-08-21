@@ -439,7 +439,7 @@ def ensure_aware(dt: datetime) -> datetime:
 
 def sanitize_md(s: str) -> str:
     # Remove `[]` symbols to ensure correct markdown in the references
-    return re.sub(r'[\[\]]', '', s)
+    return re.sub(r'([\\\[\]])', r'\\\1', s)
 
 
 @click.command()
