@@ -115,20 +115,22 @@ class Consolidator:
             except KeyError:
                 org = self.gh.get_organization(orgspec.name)
             for repo in org.get_repos(type="all"):
-                report.add_repo_details(
-                    self.repo2details(
-                        repo, member_activity_only=orgspec.member_activity_only
+                if not repo.archived:
+                    report.add_repo_details(
+                        self.repo2details(
+                            repo, member_activity_only=orgspec.member_activity_only
+                        )
                     )
-                )
         for repospec in self.config.get_repo_specs():
             if repospec.name not in report.repostats:
                 log.info("Fetching repo %s", repospec.name)
                 repo = self.gh.get_repo(repospec.name)
-                report.add_repo_details(
-                    self.repo2details(
-                        repo, member_activity_only=repospec.member_activity_only
+                if not repo.archived:
+                    report.add_repo_details(
+                        self.repo2details(
+                            repo, member_activity_only=repospec.member_activity_only
+                        )
                     )
-                )
         return report
 
     def repo2details(
