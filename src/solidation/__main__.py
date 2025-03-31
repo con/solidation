@@ -252,7 +252,7 @@ class Report:
                 if user is None:
                     user = i.user.login
                 s += (
-                    f"- [{i.title}]({i.html_url}) by {user}"
+                    f"- [{sanitize_md(i.title)}]({i.html_url}) by {user}"
                     f" [{i.repository.full_name}]\n"
                 )
 
@@ -273,7 +273,10 @@ class Report:
         if untriaged_issues:
             s += f"##### Untriaged issues of the last {dayscovered} days\n"
             for i in sorted(untriaged_issues, key=lambda x: x.created_at):
-                s += f"- [{i.title}]({i.html_url}) [{i.repository.full_name}]\n"
+                s += (
+                    f"- [{sanitize_md(i.title)}]({i.html_url}) "
+                    + f"[{i.repository.full_name}]\n"
+                )
 
         s += (
             f"##### Max {self.config.num_oldest_prs} oldest, open, non-draft"
@@ -283,7 +286,7 @@ class Report:
             (p for p in self.open_prs if not p.draft), key=lambda x: x.created_at
         )[: self.config.num_oldest_prs]:
             age = now - ensure_aware(pr.created_at)
-            s += f"- [{pr.title}]({pr.html_url}) ({age.days} days)\n"
+            s += f"- [{sanitize_md(pr.title)}]({pr.html_url}) ({age.days} days)\n"
 
         n_random_ip = min(self.config.max_random_issues, len(self.open_ip))
         if n_random_ip:
@@ -299,7 +302,7 @@ class Report:
                     # issue, which slows things down considerably.
                     continue
                 age = now - ensure_aware(i.created_at)  # type: ignore[unreachable]
-                s += f"- [{i.title}]({i.html_url}) ({age.days} days old)\n"
+                s += f"- [{sanitize_md(i.title)}]({i.html_url}) ({age.days} days old)\n"
                 n_random_ip -= 1
                 if n_random_ip == 0:
                     break
@@ -437,6 +440,11 @@ def ensure_aware(dt: datetime) -> datetime:
     # that's fixed <https://github.com/PyGithub/PyGithub/pull/1831>, we need to
     # make such datetimes timezone-aware manually.
     return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+
+
+def sanitize_md(s: str) -> str:
+    # Remove `[]` symbols to ensure correct markdown in the references
+    return re.sub(r"([\\\[\]])", r"\\\1", s)
 
 
 @click.command()
